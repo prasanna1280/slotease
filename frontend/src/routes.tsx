@@ -14,6 +14,7 @@ const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'))
 const BookingPage = lazy(() => import('@/pages/BookingPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
+const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'))
 
 /* Owner app pages (FRONTEND-B) */
 const DashboardPage = lazy(() => import('@/pages/app/DashboardPage'))
@@ -75,6 +76,7 @@ export const routes: RouteObject[] = [
           },
         ],
       },
+      { path: '/privacy', element: page(PrivacyPage) },
       { path: '/book/:slug', element: page(BookingPage) },
       { path: '/:slug', element: page(BookingPage) },
       { path: '*', element: page(NotFoundPage) },

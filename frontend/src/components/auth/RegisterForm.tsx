@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { ChevronDown } from 'lucide-react'
 import { useState, type ChangeEvent } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
+import { Link } from 'react-router-dom'
 import { PasswordInput } from '@/components/auth/PasswordInput'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -259,7 +260,11 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       </Button>
 
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
-        No card required. Cancel anytime during your trial.
+        No card required. Cancel anytime during your trial. See how we handle your data in our{' '}
+        <Link to="/privacy" target="_blank" rel="noopener" className="font-medium text-primary hover:underline">
+          privacy policy
+        </Link>
+        .
       </p>
     </form>
   )

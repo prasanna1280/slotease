@@ -58,7 +58,15 @@ export function PublicFooter() {
           <Logo size="sm" />
           <span className="hidden sm:inline">Online appointment booking for clinics and salons.</span>
         </div>
-        <p>© {year} SlotEase. All rights reserved.</p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <Link
+            to="/privacy"
+            className="inline-flex min-h-11 items-center rounded-sm hover:text-foreground sm:min-h-8"
+          >
+            Privacy policy
+          </Link>
+          <p>© {year} SlotEase. All rights reserved.</p>
+        </div>
       </div>
     </footer>
   )

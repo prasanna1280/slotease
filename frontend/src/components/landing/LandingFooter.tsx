@@ -96,7 +96,12 @@ export function LandingFooter() {
         </div>
         <div className="mt-10 flex flex-col gap-2 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {year} SlotEase. All rights reserved.</p>
-          <p>Made for appointment businesses in India and beyond.</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Link to="/privacy" className={linkClass}>
+              Privacy policy
+            </Link>
+            <p>Made for appointment businesses in India and beyond.</p>
+          </div>
         </div>
       </div>
     </footer>

@@ -27,6 +27,7 @@ customers and monthly reports. Plan: **₹499/month** after a 14-day free trial 
 | Email | Booking confirmation (customer + owner) and password reset via Resend or SMTP (console fallback) |
 | Security | bcrypt, JWT access + rotating refresh tokens with reuse detection, rate limits, tenant isolation on every query |
 | Responsive | 320px phones → iPhone / Android → iPad → laptops → large monitors; safe areas, 44px touch targets |
+| Privacy | Public privacy policy at `/privacy`, linked from footers, sign-up and the booking form (contact and date in `frontend/src/lib/legal.ts`) |
 
 ---
 

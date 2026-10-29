@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { Link } from 'react-router-dom'
 import { StepHeading } from '@/components/booking/BookingStepper'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -166,6 +167,14 @@ export function DetailsStep({
             {...register('notes')}
           />
         </Field>
+
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Your details are shared with this business to manage your appointment. Read our{' '}
+          <Link to="/privacy" target="_blank" rel="noopener" className="font-medium text-primary hover:underline">
+            privacy policy
+          </Link>
+          .
+        </p>
       </form>
     </section>
   )
