@@ -134,6 +134,19 @@ function SidebarUserMenu({ user, business, onSignOut }: { user: UserOut; busines
 /* ------------------------------------------------------------------ */
 
 function SubscriptionBanner({ business }: { business: BusinessOut }) {
+  if (business.is_suspended) {
+    return (
+      <div role="alert" className="border-b border-red-200 bg-red-50 px-safe">
+        <div className="mx-auto max-w-[1440px] px-4 py-2.5 text-sm text-red-900 sm:px-6 lg:px-8">
+          <p>
+            <span className="font-semibold">Online booking is paused by SlotEase.</span> Customers can&apos;t book from
+            your page right now. Please contact SlotEase support.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (!business.is_bookable) {
     return (
       <div role="alert" className="border-b border-red-200 bg-red-50 px-safe">

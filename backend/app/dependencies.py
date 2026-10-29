@@ -8,10 +8,10 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.auth.security import TOKEN_TYPE_ACCESS, decode_token
+from app.auth.security import TOKEN_TYPE_ACCESS, TOKEN_TYPE_ADMIN, decode_token
 from app.database import get_db
 from app.exceptions import UnauthorizedError
-from app.models import Business, User
+from app.models import AdminUser, Business, User
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -53,3 +53,29 @@ def get_current_business(user: CurrentUser, db: DbSession) -> Business:
 
 
 CurrentBusiness = Annotated[Business, Depends(get_current_business)]
+
+
+def get_current_admin(
+    db: DbSession,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> AdminUser:
+    """Resolve the signed-in platform admin from an ``admin`` token.
+
+    Raises:
+        UnauthorizedError: when the token is missing, invalid, expired, of another type, issued before
+            the admin's last password/2FA reset, or the admin is inactive.
+    """
+    if credentials is None or credentials.scheme.lower() != "bearer" or not credentials.credentials:
+        raise UnauthorizedError("Not authenticated.")
+    payload = decode_token(credentials.credentials, TOKEN_TYPE_ADMIN)
+    try:
+        admin_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise UnauthorizedError("Not authenticated.") from exc
+    admin = db.get(AdminUser, admin_id)
+    if admin is None or not admin.is_active or payload.get("sv") != admin.session_version:
+        raise UnauthorizedError("Not authenticated.")
+    return admin
+
+
+CurrentAdmin = Annotated[AdminUser, Depends(get_current_admin)]

@@ -51,6 +51,7 @@ class BusinessOut(ORMModel):
     trial_ends_at: datetime | None = None
     current_period_end: datetime | None = None
     is_bookable: bool
+    is_suspended: bool = False
     created_at: datetime
 
     @model_validator(mode="after")

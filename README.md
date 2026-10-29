@@ -102,6 +102,34 @@ Razorpay webhook URL: `https://<DOMAIN>/api/v1/billing/webhook`. Backups: `deplo
 
 ---
 
+## Platform admin (`/admin`)
+
+A separate area for SlotEase staff at `https://<DOMAIN>/admin`. It has its own sign-in with
+two-step verification (authenticator app); owner logins never work there and admin logins never
+work in the owner app. Every admin action is written to an audit log.
+
+| Page | What it does |
+|---|---|
+| Dashboard | MRR / ARR, revenue this month / quarter / year / lifetime, customers by status, trial conversion, bookings, sign-ups per month |
+| Revenue | Revenue by month, quarter, half-year or year (calendar or financial year Apr–Mar), change vs previous period, CSV download |
+| Customers | Search and filter every business; open one to edit details, change plan/status/dates, extend the trial, record a manual payment, suspend or reactivate the booking page, create an owner password-reset link, sign the owner out everywhere, or delete the business |
+| Subscriptions | Counts by status, trials ending and renewals due in 7 days, failed payments, recent cancellations |
+| Payments | Every payment (Razorpay charges are recorded automatically from webhooks; manual payments can be added) |
+| Bookings | Find any booking by ID, phone or name across all businesses and fix its status |
+| Audit log | Who did what, when, from which IP, with before/after values |
+
+Admins are created only on the server (there is no sign-up):
+
+```bash
+cd /opt/apps/slotease
+docker compose -f docker-compose.prod.yml exec backend python -m app.cli create-admin --email you@example.com --name "Your Name"
+# then open https://<DOMAIN>/admin/login and scan the QR code with an authenticator app
+docker compose -f docker-compose.prod.yml exec backend python -m app.cli reset-admin --email you@example.com --2fa        # lost phone
+docker compose -f docker-compose.prod.yml exec backend python -m app.cli reset-admin --email you@example.com --password   # new password
+```
+
+---
+
 ## Database tables
 
 All tenant tables carry `business_id` and every owner query is filtered by the business of the authenticated user.
@@ -117,6 +145,9 @@ Times are stored in UTC (`timestamptz`).
 | `customers` | id, business_id, name, phone, email — unique `(business_id, phone)` | People who booked, for history and repeat visits |
 | `appointments` | id, business_id, service_id, customer_id, reference, start_time, end_time, status, price, notes, source | `booked` / `completed` / `cancelled` / `no_show` |
 | `payment_events` | id, business_id, event_id (unique), event_type, payload | Razorpay webhook log (idempotency) |
+| `payments` | id, business_id, business_name, source (razorpay/manual), amount, paid_at, note | Revenue ledger (kept if the business is deleted) |
+| `admin_users` | id, email, password_hash, totp_secret, session_version | SlotEase staff (created from the CLI) |
+| `admin_audit_logs` | id, admin_email, action, business_id, summary, details, ip_address | Every admin action |
 
 **Double-booking guards on `appointments`:**
 
@@ -156,6 +187,7 @@ Base path `/api/v1`. Interactive Swagger docs at `http://localhost:8000/docs` in
 | `GET /stats?month=` · `GET /stats/summary?date=` | Owner | Bookings, no-show rate, revenue estimate |
 | `GET /billing` · `POST /billing/subscribe` · `/verify` · `/cancel` | Owner | Razorpay subscription |
 | `POST /billing/webhook` | Razorpay | Signed webhook |
+| `/admin/...` | Platform admin | Sign-in with 2FA, overview, revenue reports, businesses, subscriptions, payments, bookings, audit log (see above) |
 | `GET /health` · `GET /api/v1/health` | Ops | Liveness / DB check |
 
 ### Sample output

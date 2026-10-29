@@ -17,6 +17,10 @@ ALGORITHM = "HS256"
 BCRYPT_MAX_BYTES = 72
 TOKEN_TYPE_ACCESS = "access"
 TOKEN_TYPE_RESET = "reset"
+TOKEN_TYPE_ADMIN = "admin"
+TOKEN_TYPE_ADMIN_CHALLENGE = "admin_challenge"
+# The password step of an admin sign-in is valid this long; the TOTP code must follow within it.
+ADMIN_CHALLENGE_MINUTES = 5
 INVALID_TOKEN_CODE = "INVALID_TOKEN"
 INVALID_TOKEN_MESSAGE = "Invalid or expired token."
 
@@ -115,5 +119,32 @@ def create_password_reset_token(user: _ResettableUser) -> str:
         "fp": password_fingerprint(user.password_hash),
         "iat": now,
         "exp": now + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_admin_challenge_token(admin_id: int, session_version: int, *, setup: bool) -> str:
+    """Short-lived token proving the admin passed the password step (``setup`` = enrolling 2FA)."""
+    now = _now()
+    payload: dict[str, Any] = {
+        "sub": str(admin_id),
+        "type": TOKEN_TYPE_ADMIN_CHALLENGE,
+        "sv": session_version,
+        "setup": setup,
+        "iat": now,
+        "exp": now + timedelta(minutes=ADMIN_CHALLENGE_MINUTES),
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_admin_token(admin_id: int, session_version: int) -> str:
+    """Admin session token (``type=admin``). It is never accepted by owner endpoints, and vice versa."""
+    now = _now()
+    payload: dict[str, Any] = {
+        "sub": str(admin_id),
+        "type": TOKEN_TYPE_ADMIN,
+        "sv": session_version,
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.ADMIN_TOKEN_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)

@@ -35,6 +35,7 @@ def test_get_business(client: TestClient, tenant: Tenant) -> None:
         "trial_ends_at",
         "current_period_end",
         "is_bookable",
+        "is_suspended",
         "created_at",
     }
     assert body["name"] == "Glow Salon"

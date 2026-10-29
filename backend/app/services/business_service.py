@@ -109,6 +109,22 @@ def delete_business(db: Session, business: Business, user: User, data: BusinessD
     if data.confirm.strip().lower() != business.slug:
         raise AppError("Type your booking page name exactly to confirm.", code="CONFIRMATION_MISMATCH")
 
+    business_id = business.id
+    purge_business(db, business)
+    db.commit()
+    db.expunge_all()
+    logger.info("Deleted business id=%s and all of its data at the owner's request", business_id)
+
+
+def purge_business(db: Session, business: Business) -> None:
+    """Cancel a live subscription, then delete the business and all of its data (caller commits).
+
+    Payments and admin audit entries are kept, unlinked from the business (``SET NULL``), so revenue
+    history and the audit trail stay complete.
+
+    Raises:
+        ServiceUnavailableError: 503 if the subscription cannot be cancelled with Razorpay.
+    """
     billing_service.cancel_for_deletion(business)
 
     business_id = business.id
@@ -122,6 +138,3 @@ def delete_business(db: Session, business: Business, user: User, data: BusinessD
     db.execute(delete(RefreshToken).where(RefreshToken.user_id.in_(user_ids)))
     db.execute(delete(User).where(User.business_id == business_id))
     db.execute(delete(Business).where(Business.id == business_id))
-    db.commit()
-    db.expunge_all()
-    logger.info("Deleted business id=%s and all of its data at the owner's request", business_id)

@@ -18,6 +18,7 @@ from app.config import settings
 from app.exceptions import AppError
 from app.rate_limit import limiter
 from app.routers import (
+    admin,
     appointments,
     auth,
     billing,
@@ -209,6 +210,7 @@ def create_app() -> FastAPI:
         customers,
         stats,
         billing,
+        admin,
     ):
         application.include_router(module.router, prefix=API_PREFIX)
 

@@ -1,5 +1,7 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react'
 import { createBrowserRouter, Outlet, type RouteObject } from 'react-router-dom'
+import { AdminAuthProvider, RequireAdmin } from '@/admin/AdminAuthProvider'
+import { AdminShell } from '@/admin/components/AdminShell'
 import { GuestRoute } from '@/components/auth/GuestRoute'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
@@ -27,8 +29,28 @@ const ReportsPage = lazy(() => import('@/pages/app/ReportsPage'))
 const BillingPage = lazy(() => import('@/pages/app/BillingPage'))
 const SettingsPage = lazy(() => import('@/pages/app/SettingsPage'))
 
+/* Platform admin (SlotEase staff) */
+const AdminLoginPage = lazy(() => import('@/admin/pages/AdminLoginPage'))
+const AdminDashboardPage = lazy(() => import('@/admin/pages/AdminDashboardPage'))
+const AdminRevenuePage = lazy(() => import('@/admin/pages/AdminRevenuePage'))
+const AdminCustomersPage = lazy(() => import('@/admin/pages/AdminCustomersPage'))
+const AdminCustomerDetailPage = lazy(() => import('@/admin/pages/AdminCustomerDetailPage'))
+const AdminSubscriptionsPage = lazy(() => import('@/admin/pages/AdminSubscriptionsPage'))
+const AdminPaymentsPage = lazy(() => import('@/admin/pages/AdminPaymentsPage'))
+const AdminBookingsPage = lazy(() => import('@/admin/pages/AdminBookingsPage'))
+const AdminAuditPage = lazy(() => import('@/admin/pages/AdminAuditPage'))
+
 function page(Component: LazyExoticComponent<ComponentType>) {
   return <Component />
+}
+
+/** Admin area: its own session (separate from the owner's), provided only under /admin. */
+function AdminRoot() {
+  return (
+    <AdminAuthProvider>
+      <Outlet />
+    </AdminAuthProvider>
+  )
 }
 
 /** Top-level Suspense for public pages (the AppShell has its own around its outlet). */
@@ -72,6 +94,32 @@ export const routes: RouteObject[] = [
               { path: 'billing', element: page(BillingPage) },
               { path: 'settings', element: page(SettingsPage) },
               { path: '*', element: page(NotFoundPage) },
+            ],
+          },
+        ],
+      },
+      {
+        path: '/admin',
+        element: <AdminRoot />,
+        children: [
+          { path: 'login', element: page(AdminLoginPage) },
+          {
+            element: <RequireAdmin />,
+            children: [
+              {
+                element: <AdminShell />,
+                children: [
+                  { index: true, element: page(AdminDashboardPage) },
+                  { path: 'revenue', element: page(AdminRevenuePage) },
+                  { path: 'customers', element: page(AdminCustomersPage) },
+                  { path: 'customers/:id', element: page(AdminCustomerDetailPage) },
+                  { path: 'subscriptions', element: page(AdminSubscriptionsPage) },
+                  { path: 'payments', element: page(AdminPaymentsPage) },
+                  { path: 'bookings', element: page(AdminBookingsPage) },
+                  { path: 'audit', element: page(AdminAuditPage) },
+                  { path: '*', element: page(NotFoundPage) },
+                ],
+              },
             ],
           },
         ],

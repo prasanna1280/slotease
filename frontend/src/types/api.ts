@@ -100,6 +100,8 @@ export interface BusinessOut {
   trial_ends_at: IsoDateTime | null
   current_period_end: IsoDateTime | null
   is_bookable: boolean
+  /** Paused by SlotEase support (not a billing problem). */
+  is_suspended: boolean
   created_at: IsoDateTime
 }
 

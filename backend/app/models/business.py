@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Integer, String, text
+from sqlalchemy import Boolean, Integer, String, false, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -59,6 +59,8 @@ class Business(TimestampMixin, Base):
     trial_ends_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     razorpay_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Set by a SlotEase admin: the public booking page stops taking bookings regardless of plan.
+    is_suspended: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
 
     users: Mapped[list[User]] = relationship(
         back_populates="business", cascade="all, delete-orphan", passive_deletes=True
@@ -80,9 +82,12 @@ class Business(TimestampMixin, Base):
     def is_bookable(self) -> bool:
         """Return True if the public booking page may accept bookings right now.
 
-        Active subscriptions are always bookable; a trial is bookable until ``trial_ends_at``;
-        ``past_due`` / ``cancelled`` stay bookable until the paid ``current_period_end``.
+        A suspended business never is. Otherwise active subscriptions are always bookable; a trial is
+        bookable until ``trial_ends_at``; ``past_due`` / ``cancelled`` stay bookable until the paid
+        ``current_period_end``.
         """
+        if self.is_suspended:
+            return False
         now = datetime.now(UTC)
         status = self.subscription_status
         if status == "active":

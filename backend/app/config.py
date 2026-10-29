@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+    # Admin sessions are not refreshed: sign in again (password + 2FA code) after this.
+    ADMIN_TOKEN_EXPIRE_MINUTES: int = 120
+    # Timezone used for admin reports (month, quarter and year boundaries).
+    ADMIN_REPORT_TIMEZONE: str = "Asia/Kolkata"
 
     # Web
     FRONTEND_URL: str = "http://localhost:5173"

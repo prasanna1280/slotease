@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.exceptions import AppError, ConflictError, ServiceUnavailableError
-from app.models import Business, PaymentEvent, User
+from app.models import Business, Payment, PaymentEvent, User
 from app.schemas.billing import BillingOut, SubscribeOut, VerifyIn
 from app.services import razorpay_client
 from app.services.time_utils import get_tz, is_valid_timezone, now_utc, to_local
@@ -301,6 +302,41 @@ def _apply_event(business: Business, event_type: str, subscription: dict[str, An
             business.current_period_end = period_end
 
 
+def _record_charge(
+    db: Session, business: Business, subscription: dict[str, Any], payment: dict[str, Any]
+) -> None:
+    """Add a ``subscription.charged`` payment to the revenue ledger (once per Razorpay payment id)."""
+    payment_id = payment.get("id")
+    amount = payment.get("amount")
+    if (
+        not isinstance(payment_id, str)
+        or not payment_id
+        or isinstance(amount, bool)
+        or not isinstance(amount, int)
+    ):
+        logger.warning("subscription.charged without a usable payment entity for business id=%s", business.id)
+        return
+    if (
+        amount <= 0
+        or db.scalar(select(Payment.id).where(Payment.provider_payment_id == payment_id)) is not None
+    ):
+        return
+    sub_id = subscription.get("id")
+    currency = payment.get("currency")
+    db.add(
+        Payment(
+            business_id=business.id,
+            business_name=business.name,
+            source="razorpay",
+            provider_payment_id=payment_id[:64],
+            provider_subscription_id=sub_id[:64] if isinstance(sub_id, str) else None,
+            amount=(Decimal(amount) / 100).quantize(Decimal("0.01")),  # Razorpay amounts are in paise
+            currency=currency[:3] if isinstance(currency, str) and currency else "INR",
+            paid_at=_from_unix(payment.get("created_at")) or now_utc(),
+        )
+    )
+
+
 def handle_webhook(db: Session, raw_body: bytes, signature: str | None, event_id_header: str | None) -> None:
     """Verify, de-duplicate and apply a Razorpay webhook.
 
@@ -335,9 +371,16 @@ def handle_webhook(db: Session, raw_body: bytes, signature: str | None, event_id
     if isinstance(sub_wrapper, dict) and isinstance(sub_wrapper.get("entity"), dict):
         subscription = sub_wrapper["entity"]
 
+    pay_wrapper = inner.get("payment") if isinstance(inner, dict) else None
+    payment: dict[str, Any] = {}
+    if isinstance(pay_wrapper, dict) and isinstance(pay_wrapper.get("entity"), dict):
+        payment = pay_wrapper["entity"]
+
     business = _find_business(db, subscription) if subscription else None
     if business is not None:
         _apply_event(business, event_type, subscription)
+        if event_type == "subscription.charged" and payment:
+            _record_charge(db, business, subscription, payment)
     else:
         logger.warning("Razorpay webhook %s (%s) matched no business", event_id, event_type)
 
