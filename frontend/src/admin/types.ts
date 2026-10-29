@@ -245,6 +245,13 @@ export interface ManualPaymentRequest {
   note?: string
 }
 
+export interface ViewAs {
+  access_token: string
+  expires_in: number
+  business_name: string
+  owner_email: string
+}
+
 export interface ResetLink {
   reset_url: string
   expires_minutes: number

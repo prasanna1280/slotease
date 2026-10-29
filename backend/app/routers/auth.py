@@ -63,9 +63,11 @@ def logout(data: RefreshIn, db: DbSession) -> Response:
 
 
 @router.get("/me", response_model=MeOut, responses={401: {"model": ErrorOut}})
-def get_me(user: CurrentUser, business: CurrentBusiness) -> MeOut:
-    """Return the signed-in user and their business."""
-    return auth_service.build_me(user, business)
+def get_me(request: Request, user: CurrentUser, business: CurrentBusiness) -> MeOut:
+    """Return the signed-in user and their business (and the admin, in a read-only view-as session)."""
+    me = auth_service.build_me(user, business)
+    me.viewed_by_admin = getattr(request.state, "viewed_by", None)
+    return me
 
 
 @router.patch("/me", response_model=UserOut, responses={401: {"model": ErrorOut}})

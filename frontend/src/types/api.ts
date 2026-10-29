@@ -117,6 +117,8 @@ export interface AuthOut {
 export interface MeOut {
   user: UserOut
   business: BusinessOut
+  /** Set when a SlotEase admin is viewing this account read-only. */
+  viewed_by_admin?: string | null
 }
 
 export interface RegisterRequest {

@@ -17,14 +17,16 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import totp
 from app.auth.security import (
     TOKEN_TYPE_ADMIN_CHALLENGE,
+    VIEW_AS_MINUTES,
     create_admin_challenge_token,
     create_admin_token,
     create_password_reset_token,
+    create_view_as_token,
     decode_token,
     verify_password,
 )
 from app.config import settings
-from app.exceptions import AppError, NotFoundError, SlotTakenError, UnauthorizedError
+from app.exceptions import AppError, ConflictError, NotFoundError, SlotTakenError, UnauthorizedError
 from app.models import (
     AdminAuditLog,
     AdminUser,
@@ -54,6 +56,7 @@ from app.schemas.admin import (
     PaymentOut,
     PaymentPage,
     ResetLinkOut,
+    ViewAsOut,
 )
 from app.services import business_service
 from app.services.auth_service import _dummy_password_hash, build_reset_url, revoke_all_refresh_tokens
@@ -640,6 +643,38 @@ def owner_sign_out(db: Session, admin: AdminUser, business: Business, user_id: i
         ip=ip,
     )
     db.commit()
+
+
+def view_as_owner(db: Session, admin: AdminUser, business: Business, ip: str | None) -> ViewAsOut:
+    """Start a read-only session as the business's owner (audited).
+
+    Raises:
+        ConflictError: 409 ``NO_ACTIVE_OWNER`` when the business has no active owner login.
+    """
+    owner = db.scalars(
+        select(User)
+        .where(User.business_id == business.id, User.is_active.is_(True))
+        .order_by((User.role == "owner").desc(), User.id)
+    ).first()
+    if owner is None:
+        raise ConflictError("This business has no active owner login to view.", code="NO_ACTIVE_OWNER")
+    audit(
+        db,
+        admin,
+        "owner.viewed_as",
+        f"Viewed {business.name} as {owner.email} (read-only)",
+        business_id=business.id,
+        target_type="user",
+        target_id=owner.id,
+        ip=ip,
+    )
+    db.commit()
+    return ViewAsOut(
+        access_token=create_view_as_token(owner.id, business.id, admin.id, admin.session_version),
+        expires_in=VIEW_AS_MINUTES * 60,
+        business_name=business.name,
+        owner_email=owner.email,
+    )
 
 
 # ---------------------------------------------------------------------------

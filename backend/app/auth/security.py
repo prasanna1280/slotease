@@ -21,6 +21,8 @@ TOKEN_TYPE_ADMIN = "admin"
 TOKEN_TYPE_ADMIN_CHALLENGE = "admin_challenge"
 # The password step of an admin sign-in is valid this long; the TOTP code must follow within it.
 ADMIN_CHALLENGE_MINUTES = 5
+# A read-only "view as owner" session lasts this long and cannot be refreshed.
+VIEW_AS_MINUTES = 15
 INVALID_TOKEN_CODE = "INVALID_TOKEN"
 INVALID_TOKEN_MESSAGE = "Invalid or expired token."
 
@@ -146,5 +148,25 @@ def create_admin_token(admin_id: int, session_version: int) -> str:
         "sv": session_version,
         "iat": now,
         "exp": now + timedelta(minutes=settings.ADMIN_TOKEN_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_view_as_token(user_id: int, business_id: int, admin_id: int, admin_session_version: int) -> str:
+    """Owner access token for an admin's read-only "view as owner" session.
+
+    It is a normal ``type=access`` token plus ``imp`` (the admin id) and ``isv`` (the admin's session
+    version). :func:`app.dependencies.get_current_user` rejects every non-read request made with it, and
+    stops accepting it once the admin is deactivated or signed out everywhere.
+    """
+    now = _now()
+    payload: dict[str, Any] = {
+        "sub": str(user_id),
+        "bid": business_id,
+        "type": TOKEN_TYPE_ACCESS,
+        "imp": admin_id,
+        "isv": admin_session_version,
+        "iat": now,
+        "exp": now + timedelta(minutes=VIEW_AS_MINUTES),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)

@@ -16,7 +16,8 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { PageSpinner } from '@/components/ui/spinner'
 import { useAuth } from '@/hooks/useAuth'
-import { daysUntil } from '@/lib/datetime'
+import { daysUntil, formatTime } from '@/lib/datetime'
+import { tokenStorage } from '@/lib/tokenStorage'
 import { cn, getInitials, pluralize } from '@/lib/utils'
 import type { BusinessOut, UserOut } from '@/types/api'
 
@@ -189,6 +190,35 @@ function SubscriptionBanner({ business }: { business: BusinessOut }) {
   return null
 }
 
+/** Shown while a SlotEase admin is viewing this account read-only ("View as owner"). */
+function ViewAsBanner() {
+  const session = tokenStorage.viewAs()
+  if (!session) return null
+  const end = () => {
+    tokenStorage.clear()
+    window.close()
+    // If the browser keeps the tab open, leave the owner app.
+    window.location.replace('/admin/customers')
+  }
+  return (
+    <div role="status" className="border-b border-amber-300 bg-amber-50 px-safe">
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-1 px-4 py-2.5 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-8">
+        <p>
+          <span className="font-semibold">Read-only view as {session.owner}</span> ({session.business}). Changes are
+          not saved. Ends at {formatTime(new Date(session.expiresAt * 1000))}.
+        </p>
+        <button
+          type="button"
+          onClick={end}
+          className="inline-flex min-h-11 shrink-0 items-center font-semibold text-amber-950 underline underline-offset-4 hover:no-underline sm:min-h-0"
+        >
+          End view
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* Shell                                                               */
 /* ------------------------------------------------------------------ */
@@ -292,6 +322,7 @@ export function AppShell() {
       </Sheet>
 
       <div className="flex min-h-dvh flex-col lg:min-h-dvh lg:pl-64">
+        <ViewAsBanner />
         <SubscriptionBanner business={business} />
         <main id="main-content" tabIndex={-1} className="flex-1 px-safe pb-safe focus:outline-none">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">

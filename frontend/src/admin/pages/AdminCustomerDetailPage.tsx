@@ -1,4 +1,16 @@
-import { ArrowLeft, Ban, CalendarPlus, ExternalLink, IndianRupee, KeyRound, LogOut, Pencil, PlayCircle, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Ban,
+  CalendarPlus,
+  ExternalLink,
+  Eye,
+  IndianRupee,
+  KeyRound,
+  LogOut,
+  Pencil,
+  PlayCircle,
+  Trash2,
+} from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -12,7 +24,7 @@ import {
   SuspendDialog,
 } from '@/admin/components/BusinessDialogs'
 import { ADMIN_TZ } from '@/admin/format'
-import { useAdminBusiness, useDeletePayment, useOwnerResetLink, useSignOutOwner } from '@/admin/hooks'
+import { useAdminBusiness, useDeletePayment, useOwnerResetLink, useSignOutOwner, useViewAsOwner } from '@/admin/hooks'
 import type { BusinessDetail, Owner } from '@/admin/types'
 import { QueryErrorAlert } from '@/components/dashboard/QueryErrorAlert'
 import { Button } from '@/components/ui/button'
@@ -175,6 +187,43 @@ function PaymentsCard({ business, onRecord }: { business: BusinessDetail; onReco
   )
 }
 
+/** Opens the owner app for this business in a new tab, read-only, via a URL-fragment hand-off. */
+function ViewAsButton({ business }: { business: BusinessDetail }) {
+  const viewAs = useViewAsOwner(business.id)
+  const disabled = !business.owners.some((o) => o.is_active)
+  const open = () => {
+    // Open the tab during the click (pop-up blockers allow that), then point it at the hand-off page.
+    const tab = window.open('about:blank', '_blank')
+    viewAs.mutate(undefined, {
+      onSuccess: (session) => {
+        const params = new URLSearchParams({
+          token: session.access_token,
+          business: session.business_name,
+          owner: session.owner_email,
+          exp: String(Math.floor(Date.now() / 1000) + session.expires_in),
+        })
+        const url = `/view-as#${params.toString()}`
+        if (tab) {
+          tab.opener = null
+          tab.location.href = url
+        } else {
+          toast.error('Your browser blocked the new tab. Allow pop-ups for this site and try again.')
+        }
+      },
+      onError: (err) => {
+        tab?.close()
+        toast.error(getErrorMessage(err, 'Could not open the owner view.'))
+      },
+    })
+  }
+  return (
+    <Button variant="outline" onClick={open} loading={viewAs.isPending} disabled={disabled}>
+      <Eye aria-hidden="true" />
+      View as owner
+    </Button>
+  )
+}
+
 export default function AdminCustomerDetailPage() {
   const { id } = useParams()
   const businessId = Number(id)
@@ -231,6 +280,7 @@ export default function AdminCustomerDetailPage() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <ViewAsButton business={business} />
             <Button variant="outline" onClick={() => setDialog('edit')}>
               <Pencil aria-hidden="true" />
               Edit

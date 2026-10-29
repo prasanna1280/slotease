@@ -692,3 +692,77 @@ def test_cli_create_reset_deactivate(
     capsys.readouterr()
     assert cli.main(["list-admins"]) == 0
     assert "boss@example.com\tBoss\tdeactivated\t2FA not set up" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- view as owner
+
+
+def test_view_as_owner_is_read_only_and_audited(
+    client: TestClient, db: Session, admin: Admin, tenant: Tenant
+) -> None:
+    make_service(db, tenant.business)
+    response = client.post(f"/api/v1/admin/businesses/{tenant.business.id}/view-as", headers=admin.headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["expires_in"] == 15 * 60
+    assert (body["business_name"], body["owner_email"]) == ("Glow Salon", tenant.user.email)
+    view = {"Authorization": f"Bearer {body['access_token']}"}
+
+    me = client.get("/api/v1/auth/me", headers=view).json()
+    assert me["user"]["email"] == tenant.user.email and me["viewed_by_admin"] == ADMIN_EMAIL
+    assert client.get("/api/v1/auth/me", headers=tenant.headers).json()["viewed_by_admin"] is None
+    for path in ("/api/v1/services", "/api/v1/working-hours", "/api/v1/business", "/api/v1/customers"):
+        assert client.get(path, headers=view).status_code == 200, path
+
+    writes = [
+        ("POST", "/api/v1/services", {"name": "X", "duration_min": 30, "price": "10"}),
+        ("PATCH", "/api/v1/business", {"name": "Hacked"}),
+        ("PUT", "/api/v1/working-hours", {"hours": []}),
+        ("DELETE", "/api/v1/business", {"password": "Passw0rd123", "confirm": "glow-salon"}),
+        (
+            "POST",
+            "/api/v1/auth/change-password",
+            {"current_password": "Passw0rd123", "new_password": "N3w-passw0rd"},
+        ),
+    ]
+    for method, path, payload in writes:
+        blocked = client.request(method, path, json=payload, headers=view)
+        assert blocked.status_code == 403, (method, path)
+        assert blocked.json()["error"] == "READ_ONLY_VIEW"
+    db.expire_all()
+    assert db.get(Business, tenant.business.id).name == "Glow Salon"  # type: ignore[union-attr]
+    assert audit_actions(db) == ["owner.viewed_as"]
+
+    # Signing the admin out everywhere also ends the view.
+    admin.user.session_version += 1
+    db.commit()
+    assert client.get("/api/v1/auth/me", headers=view).status_code == 401
+
+
+def test_view_as_requires_an_active_owner(
+    client: TestClient, db: Session, admin: Admin, tenant: Tenant
+) -> None:
+    tenant.user.is_active = False
+    db.commit()
+    response = client.post(f"/api/v1/admin/businesses/{tenant.business.id}/view-as", headers=admin.headers)
+    assert response.status_code == 409 and response.json()["error"] == "NO_ACTIVE_OWNER"
+    assert client.post("/api/v1/admin/businesses/999/view-as", headers=admin.headers).status_code == 404
+    assert (
+        client.post(
+            f"/api/v1/admin/businesses/{tenant.business.id}/view-as", headers=tenant.headers
+        ).status_code
+        == 401
+    )
+
+
+def test_view_as_token_stops_when_admin_is_deactivated(
+    client: TestClient, db: Session, admin: Admin, tenant: Tenant
+) -> None:
+    token = client.post(
+        f"/api/v1/admin/businesses/{tenant.business.id}/view-as", headers=admin.headers
+    ).json()
+    view = {"Authorization": f"Bearer {token['access_token']}"}
+    assert client.get("/api/v1/business", headers=view).status_code == 200
+    admin.user.is_active = False
+    db.commit()
+    assert client.get("/api/v1/business", headers=view).status_code == 401

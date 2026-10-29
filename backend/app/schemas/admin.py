@@ -399,3 +399,12 @@ class AdminAppointmentUpdate(BaseModel):
         if value not in APPOINTMENT_STATUSES:
             raise ValueError(f"Status must be one of: {', '.join(APPOINTMENT_STATUSES)}.")
         return value
+
+
+class ViewAsOut(BaseModel):
+    """A short read-only owner session for "view as owner"."""
+
+    access_token: str
+    expires_in: int
+    business_name: str
+    owner_email: str

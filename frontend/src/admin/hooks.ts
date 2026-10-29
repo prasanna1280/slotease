@@ -109,6 +109,11 @@ export function useOwnerResetLink(id: number) {
   return useMutation({ mutationFn: (userId: number) => adminService.resetLink(id, userId), onSuccess: invalidate })
 }
 
+export function useViewAsOwner(id: number) {
+  const invalidate = useInvalidateAdmin()
+  return useMutation({ mutationFn: () => adminService.viewAs(id), onSuccess: invalidate })
+}
+
 export function useSignOutOwner(id: number) {
   const invalidate = useInvalidateAdmin()
   return useMutation({ mutationFn: (userId: number) => adminService.signOutOwner(id, userId), onSuccess: invalidate })

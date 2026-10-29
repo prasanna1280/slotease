@@ -20,6 +20,7 @@ import type {
   ResetLink,
   RevenueReport,
   Subscriptions,
+  ViewAs,
 } from '@/admin/types'
 import { API_BASE_URL } from '@/services/api'
 import type { AppointmentStatus } from '@/types/api'
@@ -126,6 +127,9 @@ export const adminService = {
   },
   async resetLink(id: number, userId: number): Promise<ResetLink> {
     return (await adminApi.post<ResetLink>(`/businesses/${id}/users/${userId}/reset-link`)).data
+  },
+  async viewAs(id: number): Promise<ViewAs> {
+    return (await adminApi.post<ViewAs>(`/businesses/${id}/view-as`)).data
   },
   async signOutOwner(id: number, userId: number): Promise<void> {
     await adminApi.post(`/businesses/${id}/users/${userId}/sign-out`)

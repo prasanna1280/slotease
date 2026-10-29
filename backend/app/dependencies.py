@@ -4,21 +4,32 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.auth.security import TOKEN_TYPE_ACCESS, TOKEN_TYPE_ADMIN, decode_token
 from app.database import get_db
-from app.exceptions import UnauthorizedError
+from app.exceptions import ForbiddenError, UnauthorizedError
 from app.models import AdminUser, Business, User
 
 DbSession = Annotated[Session, Depends(get_db)]
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# Methods an admin may use while viewing as an owner (read-only).
+READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+class ReadOnlyViewError(ForbiddenError):
+    """403 READ_ONLY_VIEW - an admin viewing as the owner cannot change anything."""
+
+    code = "READ_ONLY_VIEW"
+    message = "You are viewing this account as SlotEase support. It is read-only, so changes are not saved."
+
 
 def get_current_user(
+    request: Request,
     db: DbSession,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> User:
@@ -38,7 +49,20 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise UnauthorizedError("Not authenticated.")
+    if "imp" in payload:
+        _check_view_as(request, db, payload)
     return user
+
+
+def _check_view_as(request: Request, db: Session, payload: dict[str, object]) -> None:
+    """Validate an admin "view as owner" token: admin still signed in, and the request only reads."""
+    admin_id = payload.get("imp")
+    admin = db.get(AdminUser, admin_id) if isinstance(admin_id, int) else None
+    if admin is None or not admin.is_active or payload.get("isv") != admin.session_version:
+        raise UnauthorizedError("Not authenticated.")
+    if request.method not in READ_ONLY_METHODS:
+        raise ReadOnlyViewError()
+    request.state.viewed_by = admin.email
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

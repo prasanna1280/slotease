@@ -114,6 +114,8 @@ class MeOut(BaseModel):
 
     user: UserOut
     business: BusinessOut
+    # Set when a SlotEase admin is viewing this account read-only ("view as owner").
+    viewed_by_admin: str | None = None
 
 
 class UpdateMeIn(BaseModel):

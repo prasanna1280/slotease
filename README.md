@@ -112,7 +112,7 @@ work in the owner app. Every admin action is written to an audit log.
 |---|---|
 | Dashboard | MRR / ARR, revenue this month / quarter / year / lifetime, customers by status, trial conversion, bookings, sign-ups per month |
 | Revenue | Revenue by month, quarter, half-year or year (calendar or financial year Apr–Mar), change vs previous period, CSV download |
-| Customers | Search and filter every business; open one to edit details, change plan/status/dates, extend the trial, record a manual payment, suspend or reactivate the booking page, create an owner password-reset link, sign the owner out everywhere, or delete the business |
+| Customers | Search and filter every business; open one to edit details, change plan/status/dates, extend the trial, record a manual payment, suspend or reactivate the booking page, create an owner password-reset link, sign the owner out everywhere, **view as owner** (opens their dashboard read-only in a new tab for 15 minutes; any change is refused by the server), or delete the business |
 | Subscriptions | Counts by status, trials ending and renewals due in 7 days, failed payments, recent cancellations |
 | Payments | Every payment (Razorpay charges are recorded automatically from webhooks; manual payments can be added) |
 | Bookings | Find any booking by ID, phone or name across all businesses and fix its status |

@@ -37,6 +37,7 @@ from app.schemas.admin import (
     ResetLinkOut,
     RevenueOut,
     SubscriptionsOut,
+    ViewAsOut,
 )
 from app.schemas.common import ErrorOut
 from app.services import admin_reports, admin_service, notification_service
@@ -205,6 +206,17 @@ def owner_sign_out(
     business = admin_service.get_business_or_404(db, business_id)
     admin_service.owner_sign_out(db, admin, business, user_id, _ip(request))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/businesses/{business_id}/view-as",
+    response_model=ViewAsOut,
+    responses={**AUTH_ERRORS, 404: {"model": ErrorOut}, 409: {"model": ErrorOut}},
+)
+def view_as_owner(business_id: int, request: Request, admin: CurrentAdmin, db: DbSession) -> ViewAsOut:
+    """Open the owner app as this business's owner, read-only, for 15 minutes (audited)."""
+    business = admin_service.get_business_or_404(db, business_id)
+    return admin_service.view_as_owner(db, admin, business, _ip(request))
 
 
 @router.delete(
