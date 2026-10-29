@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # NoDecode: accept a plain comma-separated string from the environment instead of JSON.
     CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
     RATE_LIMIT_ENABLED: bool = True
+    # Where rate-limit counters live. "memory://" is per process; production uses Redis
+    # (redis://redis:6379/0) so every gunicorn worker shares one counter per client.
+    RATE_LIMIT_STORAGE_URI: str = "memory://"
 
     # Plan
     TRIAL_DAYS: int = 14

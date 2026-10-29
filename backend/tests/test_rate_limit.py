@@ -6,9 +6,14 @@ from collections.abc import Iterator
 from datetime import date
 
 import pytest
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.rate_limit import limiter
 from tests.factories import Tenant, booking_body, local, make_service
 
@@ -86,3 +91,29 @@ def test_reset_password_limited_to_5_per_minute(client: TestClient, limits_on: N
     body = {"token": "not-a-valid-token", "new_password": "Passw0rd!new"}
     statuses = [client.post("/api/v1/auth/reset-password", json=body).status_code for _ in range(6)]
     assert statuses == [400] * 5 + [429]
+
+
+def test_limiter_uses_configured_storage_with_memory_fallback() -> None:
+    assert settings.RATE_LIMIT_STORAGE_URI == "memory://"
+    assert limiter._in_memory_fallback_enabled is True
+
+
+def test_unreachable_redis_falls_back_to_memory_counters() -> None:
+    """A Redis outage must not fail requests: counting continues per process until Redis is back."""
+    broken = Limiter(
+        key_func=get_remote_address,
+        storage_uri="redis://127.0.0.1:1/0",
+        in_memory_fallback_enabled=True,
+    )
+    app = FastAPI()
+    app.state.limiter = broken
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+    @app.get("/ping")
+    @broken.limit("2/minute")
+    def ping(request: Request) -> dict[str, str]:
+        return {"ok": "yes"}
+
+    with TestClient(app) as test_client:
+        statuses = [test_client.get("/ping").status_code for _ in range(3)]
+    assert statuses == [200, 200, 429]

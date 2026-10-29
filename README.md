@@ -38,7 +38,7 @@ customers and monthly reports. Plan: **₹499/month** after a 14-day free trial 
 | Backend | FastAPI, Python 3.12, SQLAlchemy 2.0, Alembic, Pydantic v2, slowapi, PyJWT, bcrypt, httpx |
 | Database | PostgreSQL 16 (SQLite for the fast unit-test suite) |
 | Payments / Email | Razorpay Subscriptions · Resend or SMTP |
-| Infra | Docker Compose on a Hostinger VPS behind Traefik (Let's Encrypt), GitHub Actions CI |
+| Infra | Docker Compose on a Hostinger VPS behind Traefik (Let's Encrypt), Redis (shared rate-limit counters), GitHub Actions CI |
 
 ---
 

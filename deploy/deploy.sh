@@ -50,10 +50,11 @@ container_health() {
 log "Waiting up to ${HEALTH_TIMEOUT}s for services to become healthy"
 deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
 while :; do
-    db="$(container_health db)"; api="$(container_health backend)"; web="$(container_health frontend)"
+    db="$(container_health db)"; cache="$(container_health redis)"; api="$(container_health backend)"
+    web="$(container_health frontend)"
     proxy="external"; [ "${USE_CADDY}" = "1" ] && proxy="$(container_health caddy)"
-    printf '   db=%s backend=%s frontend=%s proxy=%s\n' "${db}" "${api}" "${web}" "${proxy}"
-    if [ "${db}" = healthy ] && [ "${api}" = healthy ] && [ "${web}" = healthy ] \
+    printf '   db=%s redis=%s backend=%s frontend=%s proxy=%s\n' "${db}" "${cache}" "${api}" "${web}" "${proxy}"
+    if [ "${db}" = healthy ] && [ "${cache}" = healthy ] && [ "${api}" = healthy ] && [ "${web}" = healthy ] \
         && { [ "${proxy}" = external ] || [ "${proxy}" = running ]; }; then
         break
     fi

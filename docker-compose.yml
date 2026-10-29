@@ -31,6 +31,17 @@ services:
       retries: 10
       start_period: 10s
 
+  redis:
+    # Shared rate-limit counters for all backend workers. Counters are short-lived, so no persistence.
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "48mb", "--maxmemory-policy", "volatile-ttl"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./backend
@@ -47,8 +58,11 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379/0
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:

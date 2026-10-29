@@ -12,7 +12,7 @@
 #  * Fresh server with nothing on 80/443: also start the bundled Caddy.
 #      USE_CADDY=1 ./deploy/deploy.sh   (= docker compose ... --profile caddy up -d --build)
 #
-# No db/backend/frontend ports are published (Docker-published ports bypass ufw).
+# No db/redis/backend/frontend ports are published (Docker-published ports bypass ufw).
 name: slotease
 
 x-logging: &default-logging
@@ -44,6 +44,22 @@ services:
           memory: 768m
     logging: *default-logging
 
+  redis:
+    # Shared rate-limit counters for all backend workers. Counters are short-lived, so no persistence.
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "48mb", "--maxmemory-policy", "volatile-ttl"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    logging: *default-logging
+
   backend:
     build:
       context: ./backend
@@ -58,8 +74,11 @@ services:
       FRONTEND_URL: https://${DOMAIN:?set DOMAIN in .env}
       CORS_ORIGINS: https://${DOMAIN}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379/0
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     deploy:
       resources:
