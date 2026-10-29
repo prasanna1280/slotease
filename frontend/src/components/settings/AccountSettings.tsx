@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { DeleteAccountCard } from '@/components/settings/DeleteAccountCard'
 import { FormCard } from '@/components/settings/FormCard'
 import {
   changePasswordSchema,
@@ -126,10 +127,12 @@ function ChangePasswordForm() {
 }
 
 export function AccountSettings({ user }: { user: UserOut }) {
+  const { business } = useAuth()
   return (
     <div className="space-y-6">
       <ProfileForm user={user} />
       <ChangePasswordForm />
+      {user.role === 'owner' && business && <DeleteAccountCard business={business} />}
     </div>
   )
 }

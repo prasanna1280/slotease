@@ -130,8 +130,9 @@ const SECTIONS: Section[] = [
         <li>Account and booking data is kept while the business's account is open.</li>
         <li>Sign-in sessions expire after 7 days of inactivity.</li>
         <li>
-          When a business asks us to close its account, we delete its account and booking data within 30 days. Backups
-          are deleted within a further 14 days.
+          When an owner deletes the account in Settings, the account and all of its booking data are deleted
+          immediately. If you ask us by email instead, we do it within 30 days. Backups are deleted within a further 14
+          days.
         </li>
       </ul>
     ),
@@ -162,8 +163,8 @@ const SECTIONS: Section[] = [
             your booking. You can also write to us and we will help.
           </li>
           <li>
-            <strong>Business owners:</strong> you can update your details in Settings, or email us to export or delete
-            your account.
+            <strong>Business owners:</strong> you can update your details or permanently delete your account in
+            Settings → Account. You can also email us for a copy of your data.
           </li>
         </ul>
         <p>We reply within 30 days.</p>

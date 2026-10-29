@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.models import SLOT_INTERVALS
 from app.schemas.common import ORMModel
@@ -138,3 +138,11 @@ class BusinessUpdate(ORMModel):
             allowed = ", ".join(str(v) for v in SLOT_INTERVALS)
             raise ValueError(f"Slot interval must be one of {allowed} minutes.")
         return value
+
+
+class BusinessDeleteIn(BaseModel):
+    """Confirmation for permanently deleting the business and all of its data."""
+
+    password: str = Field(min_length=1, max_length=128)
+    # The business's booking-page slug, typed by the owner to confirm.
+    confirm: str = Field(min_length=1, max_length=100)

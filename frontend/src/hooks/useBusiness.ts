@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { queryKeys } from '@/lib/queryKeys'
 import { authService } from '@/services/authService'
 import { businessService } from '@/services/businessService'
-import type { BusinessUpdate, ChangePasswordRequest, UpdateMeRequest } from '@/types/api'
+import type { BusinessUpdate, ChangePasswordRequest, DeleteBusinessRequest, UpdateMeRequest } from '@/types/api'
 
 /** PATCH /business, then push the result into AuthContext so AppShell banners and links update. */
 export function useUpdateBusiness() {
@@ -32,4 +32,9 @@ export function useUpdateAccount() {
 
 export function useChangePassword() {
   return useMutation({ mutationFn: (data: ChangePasswordRequest) => authService.changePassword(data) })
+}
+
+/** DELETE /business. The caller signs out afterwards (the account and its sessions no longer exist). */
+export function useDeleteBusiness() {
+  return useMutation({ mutationFn: (data: DeleteBusinessRequest) => businessService.remove(data) })
 }

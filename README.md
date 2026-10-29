@@ -142,6 +142,7 @@ Base path `/api/v1`. Interactive Swagger docs at `http://localhost:8000/docs` in
 | `GET /auth/me` · `PATCH /auth/me` · `POST /auth/change-password` | Owner | Profile |
 | `POST /auth/forgot-password` · `/auth/reset-password` | Owner | Password reset by email |
 | `GET /business` · `PATCH /business` | Owner | Business profile and booking rules |
+| `DELETE /business` | Owner | Delete the business and all its data (password + slug confirmation; cancels Razorpay) |
 | `GET /public/{slug}` | Customer | Business profile for the booking page |
 | `GET /public/{slug}/services` | Customer | List services of that business |
 | `GET /public/{slug}/slots?service_id&date` | Customer | Free slots for that day |

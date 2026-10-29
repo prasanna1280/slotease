@@ -149,6 +149,12 @@ export interface ChangePasswordRequest {
   new_password: string
 }
 
+/** DELETE /business: the owner's password plus the booking-page slug typed as confirmation. */
+export interface DeleteBusinessRequest {
+  password: string
+  confirm: string
+}
+
 export interface ForgotPasswordRequest {
   email: string
 }

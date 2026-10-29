@@ -92,3 +92,14 @@ export const changePasswordSchema = z
     path: ['new_password'],
   })
 export type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>
+
+/** Delete-account confirmation: password plus the booking-page slug typed exactly (case-insensitive). */
+export function deleteAccountSchema(slug: string) {
+  return z.object({
+    password: z.string().min(1, 'Enter your password.'),
+    confirm: z
+      .string()
+      .refine((v) => v.trim().toLowerCase() === slug, { message: `Type ${slug} to confirm.` }),
+  })
+}
+export type DeleteAccountFormValues = z.infer<ReturnType<typeof deleteAccountSchema>>

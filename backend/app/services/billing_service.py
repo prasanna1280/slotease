@@ -218,6 +218,28 @@ def cancel(db: Session, business: Business) -> BillingOut:
     return get_billing(business)
 
 
+def cancel_for_deletion(business: Business) -> None:
+    """Stop any live Razorpay subscription immediately, before the business is deleted.
+
+    Raises:
+        ServiceUnavailableError: 503 ``PAYMENT_PROVIDER_ERROR`` if Razorpay cannot be reached, so the
+            account is never deleted while the customer could still be charged.
+    """
+    if not business.razorpay_subscription_id or business.subscription_status not in ("active", "past_due"):
+        return
+    if not settings.billing_configured:
+        logger.warning(
+            "Business id=%s has subscription %s but billing is not configured; it cannot be cancelled here",
+            business.id,
+            business.razorpay_subscription_id,
+        )
+        return
+    razorpay_client.cancel_subscription(business.razorpay_subscription_id, cancel_at_cycle_end=False)
+    logger.info(
+        "Cancelled subscription %s for deleted business id=%s", business.razorpay_subscription_id, business.id
+    )
+
+
 # ---------------------------------------------------------------------------
 # Webhook
 # ---------------------------------------------------------------------------

@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+import logging
+
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.exceptions import ConflictError, ValidationAppError
-from app.models import Business
-from app.schemas.business import BusinessUpdate
+from app.auth.security import verify_password
+from app.exceptions import AppError, ConflictError, ForbiddenError, ValidationAppError
+from app.models import (
+    Appointment,
+    Business,
+    Customer,
+    PaymentEvent,
+    RefreshToken,
+    Service,
+    User,
+    WorkingHours,
+)
+from app.schemas.business import BusinessDeleteIn, BusinessUpdate
+from app.services import billing_service
 from app.services.validators import SLUG_MAX_LENGTH, is_reserved_slug, slugify
+
+logger = logging.getLogger(__name__)
 
 MAX_SLUG_ATTEMPTS = 1000
 
@@ -73,3 +88,40 @@ def update_business(db: Session, business: Business, data: BusinessUpdate) -> Bu
         raise ConflictError("This booking link is already taken.", code="SLUG_TAKEN") from exc
     db.refresh(business)
     return business
+
+
+def delete_business(db: Session, business: Business, user: User, data: BusinessDeleteIn) -> None:
+    """Permanently delete the business and everything it owns (owner only).
+
+    Cancels a live Razorpay subscription first, then removes appointments, customers, services,
+    working hours, payment events, users and their sessions, and the business, in one transaction.
+
+    Raises:
+        ForbiddenError: 403 when the user is not the business owner.
+        AppError: 400 ``INVALID_PASSWORD`` for a wrong password, 400 ``CONFIRMATION_MISMATCH`` when
+            ``confirm`` is not the business's slug.
+        ServiceUnavailableError: 503 if the subscription cannot be cancelled with Razorpay.
+    """
+    if user.role != "owner":
+        raise ForbiddenError("Only the business owner can delete the account.")
+    if not verify_password(data.password, user.password_hash):
+        raise AppError("Password is incorrect.", code="INVALID_PASSWORD")
+    if data.confirm.strip().lower() != business.slug:
+        raise AppError("Type your booking page name exactly to confirm.", code="CONFIRMATION_MISMATCH")
+
+    billing_service.cancel_for_deletion(business)
+
+    business_id = business.id
+    user_ids = select(User.id).where(User.business_id == business_id)
+    # Explicit order: appointments reference services and customers with ON DELETE RESTRICT.
+    db.execute(delete(Appointment).where(Appointment.business_id == business_id))
+    db.execute(delete(Customer).where(Customer.business_id == business_id))
+    db.execute(delete(Service).where(Service.business_id == business_id))
+    db.execute(delete(WorkingHours).where(WorkingHours.business_id == business_id))
+    db.execute(delete(PaymentEvent).where(PaymentEvent.business_id == business_id))
+    db.execute(delete(RefreshToken).where(RefreshToken.user_id.in_(user_ids)))
+    db.execute(delete(User).where(User.business_id == business_id))
+    db.execute(delete(Business).where(Business.id == business_id))
+    db.commit()
+    db.expunge_all()
+    logger.info("Deleted business id=%s and all of its data at the owner's request", business_id)
