@@ -52,6 +52,7 @@ exec gunicorn app.main:app \
     -w "${WEB_CONCURRENCY:-2}" \
     -b 0.0.0.0:8000 \
     --forwarded-allow-ips='*' \
+    --no-control-socket \
     --access-logfile - \
     --error-logfile - \
     --log-level "$(echo "${LOG_LEVEL:-info}" | tr '[:upper:]' '[:lower:]')" \
