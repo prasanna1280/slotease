@@ -415,6 +415,8 @@ export interface SubscribeOut {
   name: string
   email: string
   contact: string
+  /** When trial or paid time is left, the first charge happens at this time instead of now. */
+  starts_at: IsoDateTime | null
 }
 
 export interface BillingVerifyRequest {

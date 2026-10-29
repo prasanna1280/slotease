@@ -7,6 +7,7 @@ Every transport/HTTP failure is raised as ``ServiceUnavailableError`` (503 ``PAY
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -49,15 +50,24 @@ def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def create_subscription(
-    plan_id: str, total_count: int = 120, notes: dict[str, str] | None = None
+    plan_id: str,
+    total_count: int = 120,
+    notes: dict[str, str] | None = None,
+    start_at: datetime | None = None,
 ) -> dict[str, Any]:
-    """Create a Razorpay subscription for ``plan_id``; returns the entity (``id``, ``short_url``, ...)."""
+    """Create a Razorpay subscription for ``plan_id``; returns the entity (``id``, ``short_url``, ...).
+
+    With ``start_at`` the customer only authorises the payment method at checkout and the first
+    charge happens at that time (Razorpay ``start_at``, unix seconds).
+    """
     payload: dict[str, Any] = {
         "plan_id": plan_id,
         "total_count": total_count,
         "customer_notify": 1,
         "notes": notes or {},
     }
+    if start_at is not None:
+        payload["start_at"] = int(start_at.timestamp())
     return _post("/subscriptions", payload)
 
 

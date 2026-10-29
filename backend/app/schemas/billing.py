@@ -32,6 +32,8 @@ class SubscribeOut(BaseModel):
     name: str
     email: str
     contact: str
+    # Set when the business still has paid or trial time left: the first charge happens then.
+    starts_at: datetime | None = None
 
 
 class VerifyIn(BaseModel):

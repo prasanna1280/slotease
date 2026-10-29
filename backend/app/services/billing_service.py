@@ -26,6 +26,8 @@ PROVIDER = "razorpay"
 SUBSCRIPTION_TOTAL_COUNT = 120
 # Used until a webhook reports the real ``current_end`` after checkout verification.
 PROVISIONAL_PERIOD_DAYS = 30
+# Razorpay needs ``start_at`` comfortably in the future; closer than this starts the plan right away.
+MIN_DEFERRED_START = timedelta(minutes=15)
 
 ACTIVE_EVENTS = frozenset({"subscription.activated", "subscription.charged"})
 PAST_DUE_EVENTS = frozenset({"subscription.pending", "subscription.halted"})
@@ -81,6 +83,19 @@ def _localise(value: datetime | None, business: Business) -> datetime | None:
     return to_local(value, get_tz(business.timezone))
 
 
+def _paid_until(business: Business, now: datetime) -> datetime | None:
+    """Return when the business's already-covered time (trial or paid period) ends, if still ahead.
+
+    A new subscription starts charging then, so resubscribing never forfeits days already paid for.
+    """
+    candidates = [
+        end
+        for end in (business.trial_ends_at, business.current_period_end)
+        if end is not None and end > now + MIN_DEFERRED_START
+    ]
+    return max(candidates, default=None)
+
+
 def _require_configured() -> None:
     if not settings.billing_configured:
         raise BillingNotConfiguredError()
@@ -110,6 +125,9 @@ def get_billing(business: Business) -> BillingOut:
 def subscribe(db: Session, business: Business, user: User) -> SubscribeOut:
     """Create a Razorpay subscription for the business and return Checkout parameters.
 
+    If trial or paid time remains (e.g. resubscribing after a cancel), the subscription starts when
+    that time runs out instead of charging now.
+
     Raises:
         BillingNotConfiguredError: 503 when Razorpay keys are missing.
         ConflictError: 409 ``ALREADY_SUBSCRIBED`` when the subscription is already active.
@@ -119,10 +137,12 @@ def subscribe(db: Session, business: Business, user: User) -> SubscribeOut:
     if business.subscription_status == "active":
         raise ConflictError("This business already has an active subscription.", code="ALREADY_SUBSCRIBED")
 
+    start_at = _paid_until(business, now_utc())
     entity = razorpay_client.create_subscription(
         settings.RAZORPAY_PLAN_ID,
         total_count=SUBSCRIPTION_TOTAL_COUNT,
         notes={"business_id": str(business.id), "business_slug": business.slug},
+        start_at=start_at,
     )
     subscription_id = entity.get("id")
     if not isinstance(subscription_id, str) or not subscription_id:
@@ -145,6 +165,7 @@ def subscribe(db: Session, business: Business, user: User) -> SubscribeOut:
         name=business.name,
         email=user.email,
         contact=business.phone,
+        starts_at=_localise(start_at, business),
     )
 
 
@@ -166,7 +187,9 @@ def verify_checkout(db: Session, business: Business, data: VerifyIn) -> BillingO
     business.subscription_status = "active"
     business.plan = "pro"
     if business.current_period_end is None or business.current_period_end < now:
-        business.current_period_end = now + timedelta(days=PROVISIONAL_PERIOD_DAYS)
+        # A subscription made during the trial is first charged when the trial ends.
+        first_charge = _paid_until(business, now) or now
+        business.current_period_end = first_charge + timedelta(days=PROVISIONAL_PERIOD_DAYS)
     db.commit()
     db.refresh(business)
     logger.info("Subscription %s verified for business id=%s", data.razorpay_subscription_id, business.id)

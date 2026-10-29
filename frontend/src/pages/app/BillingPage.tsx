@@ -52,14 +52,21 @@ export default function BillingPage() {
         key: sub.key_id,
         subscription_id: sub.subscription_id,
         name: 'SlotEase',
-        description: 'SlotEase Pro · ₹499/month',
+        description: sub.starts_at
+          ? `SlotEase Pro · ₹499/month from ${formatDate(sub.starts_at, business.timezone)}`
+          : 'SlotEase Pro · ₹499/month',
         prefill: { name: sub.name || user?.full_name, email: sub.email || user?.email, contact: sub.contact },
         notes: { business: business.slug },
         theme: { color: '#1d4ed8' },
       })
       setCheckoutOpen(false)
       verify.mutate(response, {
-        onSuccess: () => toast.success('Subscription active. Thank you!', { description: 'Your plan is now SlotEase Pro.' }),
+        onSuccess: () =>
+          toast.success('Subscription active. Thank you!', {
+            description: sub.starts_at
+              ? `Your plan is now SlotEase Pro. The first ₹499 charge is on ${formatDate(sub.starts_at, business.timezone)}, when your current time runs out.`
+              : 'Your plan is now SlotEase Pro.',
+          }),
         onError: (err) =>
           toast.error(
             getErrorCode(err) === 'INVALID_SIGNATURE'

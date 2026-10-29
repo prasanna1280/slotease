@@ -41,9 +41,12 @@ def configured(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[Any]]:
     calls: dict[str, list[Any]] = {"create": [], "cancel": []}
 
     def fake_create(
-        plan_id: str, total_count: int = 120, notes: dict[str, str] | None = None
+        plan_id: str,
+        total_count: int = 120,
+        notes: dict[str, str] | None = None,
+        start_at: datetime | None = None,
     ) -> dict[str, Any]:
-        calls["create"].append((plan_id, total_count, notes))
+        calls["create"].append((plan_id, total_count, notes, start_at))
         return {"id": "sub_123", "short_url": "https://rzp.io/i/abc", "status": "created"}
 
     def fake_cancel(sub_id: str, cancel_at_cycle_end: bool = True) -> dict[str, Any]:
@@ -126,6 +129,8 @@ def test_subscribe_not_configured_503(client: TestClient, tenant: Tenant) -> Non
 def test_subscribe_mocked(
     client: TestClient, db: Session, tenant: Tenant, configured: dict[str, list[Any]]
 ) -> None:
+    tenant.business.trial_ends_at = datetime.now(UTC) - timedelta(days=1)
+    db.commit()
     response = client.post("/api/v1/billing/subscribe", headers=tenant.headers)
     assert response.status_code == 200
     assert response.json() == {
@@ -137,11 +142,69 @@ def test_subscribe_mocked(
         "name": "Glow Salon",
         "email": tenant.user.email,
         "contact": "+919876543210",
+        "starts_at": None,
     }
     assert configured["create"] == [
-        (PLAN_ID, 120, {"business_id": str(tenant.business.id), "business_slug": "glow-salon"})
+        (PLAN_ID, 120, {"business_id": str(tenant.business.id), "business_slug": "glow-salon"}, None)
     ]
     assert refreshed(db, tenant.business).razorpay_subscription_id == "sub_123"
+
+
+def test_subscribe_during_trial_starts_charging_when_trial_ends(
+    client: TestClient, db: Session, tenant: Tenant, configured: dict[str, list[Any]]
+) -> None:
+    trial_end = datetime(2099, 3, 1, 6, 30, tzinfo=UTC)
+    tenant.business.trial_ends_at = trial_end
+    db.commit()
+    response = client.post("/api/v1/billing/subscribe", headers=tenant.headers)
+    assert response.status_code == 200
+    assert response.json()["starts_at"] == "2099-03-01T12:00:00+05:30"
+    assert configured["create"][0][3] == trial_end
+
+
+def test_resubscribe_after_cancel_keeps_paid_days(
+    client: TestClient, db: Session, tenant: Tenant, configured: dict[str, list[Any]]
+) -> None:
+    """Cancel, then resubscribe before the paid period ends: the first new charge is at period end."""
+    paid_until = datetime(2099, 6, 1, tzinfo=UTC)
+    tenant.business.trial_ends_at = datetime.now(UTC) - timedelta(days=40)
+    tenant.business.subscription_status = "cancelled"
+    tenant.business.current_period_end = paid_until
+    db.commit()
+    response = client.post("/api/v1/billing/subscribe", headers=tenant.headers)
+    assert response.status_code == 200
+    assert configured["create"][0][3] == paid_until
+
+    payment, sub = "pay_1", "sub_123"
+    verify = _verify(client, tenant, payment, sub, sign(KEY_SECRET, f"{payment}|{sub}".encode()))
+    assert verify.status_code == 200
+    fresh = refreshed(db, tenant.business)
+    assert fresh.subscription_status == "active"
+    assert fresh.current_period_end == paid_until
+
+
+def test_subscribe_with_time_nearly_up_starts_now(
+    client: TestClient, db: Session, tenant: Tenant, configured: dict[str, list[Any]]
+) -> None:
+    tenant.business.trial_ends_at = datetime.now(UTC) + timedelta(minutes=5)
+    db.commit()
+    assert client.post("/api/v1/billing/subscribe", headers=tenant.headers).status_code == 200
+    assert configured["create"][0][3] is None
+
+
+def test_verify_during_trial_sets_provisional_period_from_trial_end(
+    client: TestClient, db: Session, tenant: Tenant, configured: dict[str, list[Any]]
+) -> None:
+    trial_end = datetime(2099, 3, 1, tzinfo=UTC)
+    tenant.business.trial_ends_at = trial_end
+    db.commit()
+    client.post("/api/v1/billing/subscribe", headers=tenant.headers)
+    payment, sub = "pay_2", "sub_123"
+    assert (
+        _verify(client, tenant, payment, sub, sign(KEY_SECRET, f"{payment}|{sub}".encode())).status_code
+        == 200
+    )
+    assert refreshed(db, tenant.business).current_period_end == trial_end + timedelta(days=30)
 
 
 def test_subscribe_already_active_409(
@@ -450,6 +513,7 @@ def test_razorpay_client_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(razorpay_client.httpx, "post", fake_post)
     assert razorpay_client.create_subscription("plan_x", notes={"a": "b"}) == {"id": "sub_9"}
+    razorpay_client.create_subscription("plan_x", start_at=datetime(2030, 1, 1, tzinfo=UTC))
     assert razorpay_client.cancel_subscription("sub_9") == {"id": "sub_9"}
     razorpay_client.cancel_subscription("sub_9", cancel_at_cycle_end=False)
     assert seen[0]["url"] == "https://api.razorpay.com/v1/subscriptions"
@@ -461,9 +525,10 @@ def test_razorpay_client_success(monkeypatch: pytest.MonkeyPatch) -> None:
     }
     assert seen[0]["auth"] == (KEY_ID, KEY_SECRET)
     assert seen[0]["timeout"] == 15.0
-    assert seen[1]["url"] == "https://api.razorpay.com/v1/subscriptions/sub_9/cancel"
-    assert seen[1]["json"] == {"cancel_at_cycle_end": 1}
-    assert seen[2]["json"] == {"cancel_at_cycle_end": 0}
+    assert seen[1]["json"]["start_at"] == PERIOD_END
+    assert seen[2]["url"] == "https://api.razorpay.com/v1/subscriptions/sub_9/cancel"
+    assert seen[2]["json"] == {"cancel_at_cycle_end": 1}
+    assert seen[3]["json"] == {"cancel_at_cycle_end": 0}
 
 
 @pytest.mark.parametrize(

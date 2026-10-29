@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# SlotEase API image: FastAPI + gunicorn/uvicorn workers, migrations on start.
+# SlotEase API image: FastAPI + gunicorn with uvicorn-worker, migrations on start.
 
 # ---------- Builder: build wheels for every dependency ----------
 FROM python:3.12-slim AS builder
@@ -34,7 +34,9 @@ RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --home-dir /app --no-create-home app
 
 # Application code (app/, alembic/, alembic.ini, pyproject.toml); see .dockerignore.
-COPY --chown=app:app . .
+# Owned by root and read-only to the app user, so a compromised process cannot modify the code.
+COPY --chown=root:root . .
+RUN chmod -R a+rX,go-w /app
 COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # Strip CRLF in case the file was checked out on Windows without .gitattributes.
 RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \

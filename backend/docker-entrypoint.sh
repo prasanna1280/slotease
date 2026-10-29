@@ -48,7 +48,7 @@ fi
 
 echo "[entrypoint] Starting gunicorn with ${WEB_CONCURRENCY:-2} worker(s)..."
 exec gunicorn app.main:app \
-    -k uvicorn.workers.UvicornWorker \
+    -k uvicorn_worker.UvicornWorker \
     -w "${WEB_CONCURRENCY:-2}" \
     -b 0.0.0.0:8000 \
     --forwarded-allow-ips='*' \

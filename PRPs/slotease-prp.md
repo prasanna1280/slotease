@@ -568,7 +568,7 @@ errors → `ServiceUnavailableError("PAYMENT_PROVIDER_ERROR")`. Must be triviall
 
 - `backend/Dockerfile`: python:3.12-slim, multi-stage (build wheels → runtime), non-root user, `tzdata` via pip,
   `docker-entrypoint.sh` (LF line endings) runs `alembic upgrade head` then
-  `gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:8000 --forwarded-allow-ips='*'`
+  `gunicorn app.main:app -k uvicorn_worker.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:8000 --forwarded-allow-ips='*'`
   (wait for DB with a short retry loop in Python). HEALTHCHECK on `/health` using python urllib.
 - `frontend/Dockerfile`: node:22-alpine build (`npm ci`, `npm run build` with `ARG VITE_API_URL=""`) → nginx:1.27-alpine;
   `frontend/nginx.conf`: SPA fallback `try_files $uri /index.html`, `location /api/ { proxy_pass http://backend:8000; ... }`,
