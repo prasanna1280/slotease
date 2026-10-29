@@ -49,7 +49,8 @@ def login(request: Request, data: LoginIn, db: DbSession) -> AuthOut:
 
 
 @router.post("/refresh", response_model=AuthOut, responses={401: {"model": ErrorOut}})
-def refresh(data: RefreshIn, db: DbSession) -> AuthOut:
+@limiter.limit("30/minute")
+def refresh(request: Request, data: RefreshIn, db: DbSession) -> AuthOut:
     """Rotate a refresh token: the presented token is revoked and a new pair is issued."""
     return auth_service.refresh(db, data.refresh_token)
 
@@ -104,7 +105,8 @@ def forgot_password(
     response_class=Response,
     responses={400: {"model": ErrorOut}},
 )
-def reset_password(data: ResetPasswordIn, db: DbSession) -> Response:
+@limiter.limit("5/minute")
+def reset_password(request: Request, data: ResetPasswordIn, db: DbSession) -> Response:
     """Set a new password using the token from the reset e-mail. Signs out all sessions."""
     auth_service.reset_password(db, data.token, data.new_password)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

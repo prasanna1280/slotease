@@ -35,12 +35,19 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-/** Single-flight refresh: concurrent 401s share one refresh request. */
-let refreshPromise: Promise<string | null> | null = null
+/**
+ * Outcome of a refresh: the new access token, `'rejected'` when the server refused the refresh token
+ * (401 - the session is over), or `'failed'` for anything else (network error, 429, 5xx - the session
+ * may still be valid, so it is kept).
+ */
+export type RefreshResult = string | 'rejected' | 'failed'
 
-async function performRefresh(): Promise<string | null> {
+/** Single-flight refresh: concurrent 401s share one refresh request. */
+let refreshPromise: Promise<RefreshResult> | null = null
+
+async function performRefresh(): Promise<RefreshResult> {
   const refreshToken = tokenStorage.getRefreshToken()
-  if (!refreshToken) return null
+  if (!refreshToken) return 'rejected'
   try {
     // Bare axios call so this request never goes through the interceptors below.
     const { data } = await axios.post<AuthOut>(
@@ -51,13 +58,13 @@ async function performRefresh(): Promise<string | null> {
     tokenStorage.setTokens(data.access_token, data.refresh_token)
     window.dispatchEvent(new CustomEvent<AuthOut>(AUTH_REFRESHED_EVENT, { detail: data }))
     return data.access_token
-  } catch {
-    return null
+  } catch (err: unknown) {
+    return axios.isAxiosError(err) && err.response?.status === 401 ? 'rejected' : 'failed'
   }
 }
 
 /** Refresh the access token once, sharing the in-flight request between callers. */
-export function refreshAccessToken(): Promise<string | null> {
+export function refreshAccessToken(): Promise<RefreshResult> {
   if (!refreshPromise) {
     refreshPromise = performRefresh().finally(() => {
       refreshPromise = null
@@ -81,11 +88,13 @@ api.interceptors.response.use(
     original._retried = true
     const newToken = await refreshAccessToken()
 
-    if (!newToken) {
+    if (newToken === 'rejected') {
       tokenStorage.clear()
       window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT))
       return Promise.reject(error)
     }
+    // Rate-limited, offline or server error: keep the session and surface the original error.
+    if (newToken === 'failed') return Promise.reject(error)
 
     const headers = AxiosHeaders.from(original.headers)
     headers.set('Authorization', `Bearer ${newToken}`)

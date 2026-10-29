@@ -73,3 +73,16 @@ def test_public_booking_limited_to_10_per_minute(
         for i in range(11)
     ]
     assert statuses == [201] * 10 + [429]
+
+
+def test_refresh_limited_to_30_per_minute(client: TestClient, limits_on: None) -> None:
+    statuses = [
+        client.post("/api/v1/auth/refresh", json={"refresh_token": "x" * 64}).status_code for _ in range(31)
+    ]
+    assert statuses == [401] * 30 + [429]
+
+
+def test_reset_password_limited_to_5_per_minute(client: TestClient, limits_on: None) -> None:
+    body = {"token": "not-a-valid-token", "new_password": "Passw0rd!new"}
+    statuses = [client.post("/api/v1/auth/reset-password", json=body).status_code for _ in range(6)]
+    assert statuses == [400] * 5 + [429]
