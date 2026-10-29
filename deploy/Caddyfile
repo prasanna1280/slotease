@@ -1,0 +1,17 @@
+# SlotEase - Caddy reverse proxy with automatic HTTPS (Let's Encrypt).
+# The DNS A record for {$DOMAIN} must point at this server BEFORE first start,
+# and ports 80 + 443 must be open (ufw allow 80,443/tcp).
+# DOMAIN unset -> plain HTTP on :80 (useful for a first smoke test by IP).
+{$DOMAIN::80} {
+	encode zstd gzip
+
+	header {
+		# HSTS only makes sense over HTTPS; Caddy serves it on the TLS site.
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Caddy replaces any client-sent X-Forwarded-For with the real client IP,
+	# nginx (frontend) trusts it from the Docker network and forwards it to the API.
+	reverse_proxy frontend:80
+}

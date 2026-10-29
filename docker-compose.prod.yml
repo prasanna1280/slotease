@@ -1,0 +1,121 @@
+# SlotEase - production stack for a single VPS (Hostinger KVM, Ubuntu 24.04).
+#
+#   cp deploy/production.env.example .env   # then fill in every CHANGE value
+#   ./deploy/deploy.sh
+#
+# HTTPS comes from a reverse proxy in front of nginx (frontend), which serves the SPA and proxies
+# /api/ + /health to the backend:
+#
+#  * Server already running Traefik (Docker provider, "websecure" entrypoint, "letsencrypt" resolver)
+#    - the default: the labels on `frontend` route ${DOMAIN} to this app.
+#      docker compose -f docker-compose.prod.yml up -d --build
+#  * Fresh server with nothing on 80/443: also start the bundled Caddy.
+#      USE_CADDY=1 ./deploy/deploy.sh   (= docker compose ... --profile caddy up -d --build)
+#
+# No db/backend/frontend ports are published (Docker-published ports bypass ufw).
+name: slotease
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-slotease}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-slotease}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    shm_size: 128mb
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./backend
+    image: slotease-backend:prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-slotease}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-slotease}
+      ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      FRONTEND_URL: https://${DOMAIN:?set DOMAIN in .env}
+      CORS_ORIGINS: https://${DOMAIN}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    logging: *default-logging
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Empty = same origin: the SPA calls https://${DOMAIN}/api/v1 through Caddy -> nginx.
+        VITE_API_URL: ""
+    image: slotease-frontend:prod
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.slotease-web.rule: Host(`${DOMAIN}`)
+      traefik.http.routers.slotease-web.entrypoints: websecure
+      traefik.http.routers.slotease-web.tls.certresolver: letsencrypt
+      traefik.http.routers.slotease-web.middlewares: slotease-headers
+      traefik.http.services.slotease-web.loadbalancer.server.port: "80"
+      traefik.http.middlewares.slotease-headers.headers.stsSeconds: "31536000"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

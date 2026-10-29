@@ -1,0 +1,68 @@
+# SlotEase - full stack (Postgres + API + nginx/SPA) on http://<host>:8080 WITHOUT Caddy/HTTPS.
+#
+# NOTE: Docker is NOT used on the development machine. Local development runs without Docker
+# (backend venv + uvicorn, frontend `npm run dev`; see deploy/README.md "Local development").
+# This file is for CI and for an optional plain-HTTP smoke test ON THE VPS:
+#   cp .env.example .env        # optional: every value below has a dev default
+#   docker compose up -d --build
+#   curl http://localhost:8080/health && curl http://localhost:8080/api/v1/health
+# Production uses docker-compose.prod.yml.
+#
+# Only the frontend (nginx) port is published; it proxies /api/ and /health to the backend.
+name: slotease
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-slotease}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-slotease}
+      POSTGRES_DB: ${POSTGRES_DB:-slotease}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Uncomment to reach Postgres from the host (e.g. a DB GUI or running the API outside Docker):
+    # ports:
+    #   - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+    image: slotease-backend:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Always points at the compose db service (overrides DATABASE_URL from .env).
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-slotease}:${POSTGRES_PASSWORD:-slotease}@db:5432/${POSTGRES_DB:-slotease}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      SECRET_KEY: ${SECRET_KEY:-dev-only-secret-key-change-me-0123456789abcdef}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    image: slotease-frontend:local
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

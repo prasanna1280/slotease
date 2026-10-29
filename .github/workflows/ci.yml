@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint, types, tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: slotease
+          POSTGRES_PASSWORD: slotease
+          POSTGRES_DB: slotease_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slotease -d slotease_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SECRET_KEY: ci-only-secret-key-not-used-anywhere-else-0123456789
+      RATE_LIMIT_ENABLED: "false"
+      # Fast suite runs on SQLite; this enables the optional Postgres integration tests
+      # (Alembic migrations + exclusion constraint).
+      TEST_POSTGRES_URL: postgresql+psycopg://slotease:slotease@localhost:5432/slotease_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff check)
+        run: ruff check .
+
+      - name: Format (ruff format --check)
+        run: ruff format --check .
+
+      - name: Type check (mypy)
+        run: mypy app
+
+      - name: Tests (coverage >= 80%)
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: ""
+
+  docker:
+    name: Docker images (build only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose files
+        run: |
+          cp .env.example .env
+          docker compose config -q
+          docker compose -f docker-compose.prod.yml config -q
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          tags: slotease-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: slotease-frontend:ci
+          build-args: |
+            VITE_API_URL=
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
