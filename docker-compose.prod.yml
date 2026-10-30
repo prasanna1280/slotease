@@ -78,8 +78,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # Only ordering: the API runs without Redis (rate limiting falls back to per-process counters),
+      # so an unhealthy Redis must never stop the backend from starting.
       redis:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+import pytest
+import redis
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.database import get_db
 from app.main import app
 
@@ -19,7 +22,23 @@ def test_root_health(client: TestClient) -> None:
 def test_api_health_checks_database(client: TestClient) -> None:
     response = client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "database": "ok"}
+    assert response.json() == {"status": "ok", "database": "ok", "redis": "disabled"}
+
+
+def test_api_health_reports_redis_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "RATE_LIMIT_STORAGE_URI", "redis://redis:6379/0")
+    monkeypatch.setattr(redis.Redis, "ping", lambda self: True)
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "database": "ok", "redis": "ok"}
+
+
+def test_api_health_redis_down_is_degraded(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Nothing listens on port 1, so the connection is refused immediately.
+    monkeypatch.setattr(settings, "RATE_LIMIT_STORAGE_URI", "redis://127.0.0.1:1/0")
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "degraded", "database": "ok", "redis": "degraded"}
 
 
 def test_api_health_database_down_returns_503(client: TestClient) -> None:

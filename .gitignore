@@ -35,3 +35,6 @@ backups/
 *.sql.gz
 *.log
 coverage.xml
+
+# deploy/watchdog.sh lock file
+.watchdog.lock

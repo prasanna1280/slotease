@@ -24,6 +24,7 @@ Postgres, the API and nginx are reachable only on the internal Docker network.
 | `deploy/production.env.example` | Template for the server's `.env` |
 | `deploy/deploy.sh` | Pull, build, restart, wait for health, prune |
 | `deploy/backup.sh` | `pg_dump` to `./backups`, 14-day retention |
+| `deploy/watchdog.sh` | Cron: restart containers Docker marks `unhealthy` |
 
 Recommended plan: **KVM 1** (1 vCPU / 4 GB) is enough to start; **KVM 2** gives headroom for builds.
 
@@ -189,7 +190,7 @@ Verify:
 ```bash
 curl -I https://<your-domain>
 curl https://<your-domain>/health            # {"status":"ok"}
-curl https://<your-domain>/api/v1/health     # {"status":"ok","database":"ok"}
+curl https://<your-domain>/api/v1/health     # {"status":"ok","database":"ok","redis":"ok"}
 ```
 
 Open `https://<your-domain>`, sign up as an owner and make a test booking on your public page.
@@ -222,6 +223,22 @@ Add (daily at 02:30 server time):
 
 Backups older than 14 days are deleted automatically (`RETENTION_DAYS` to change). Copy them off the server
 regularly (e.g. `scp` / `rsync` to your PC, or enable Hostinger's weekly VPS snapshots as a second layer).
+
+### Watchdog (restart hung containers)
+
+`restart: unless-stopped` brings back crashed containers, but a hung one stays up while failing its
+healthcheck. `deploy/watchdog.sh` restarts any of `backend`, `frontend`, `redis` that Docker marks
+`unhealthy` (about 90 seconds of failed checks). Add it to the same crontab:
+
+```
+* * * * * /home/deploy/slotease/deploy/watchdog.sh >> /home/deploy/slotease/backups/watchdog.log 2>&1
+```
+
+`grep restarting backups/watchdog.log` lists every automatic restart. The database is not restarted
+automatically; a failing Postgres needs a look first.
+
+`/api/v1/health` returns `"status": "degraded", "redis": "degraded"` (still HTTP 200) when Redis is down:
+bookings keep working, and rate limiting falls back to per-worker counters.
 
 Restore (overwrites current data):
 
