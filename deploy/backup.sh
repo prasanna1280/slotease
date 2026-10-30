@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # SlotEase - PostgreSQL backup (gzipped plain SQL) with 14-day retention.
 #   ./deploy/backup.sh                     # writes ./backups/slotease-YYYYmmdd-HHMMSS.sql.gz
-# Cron (daily 02:30, as the deploy user):
-#   30 2 * * * /home/deploy/slotease/deploy/backup.sh >> /home/deploy/slotease/backups/backup.log 2>&1
+# Cron (daily 21:00 UTC = 02:30 IST; the VPS clock is UTC):
+#   0 21 * * * /opt/apps/slotease/deploy/backup.sh >> /opt/apps/slotease/backups/backup.log 2>&1
 # Env overrides: BACKUP_DIR (default <repo>/backups), RETENTION_DAYS (default 14),
 #                COMPOSE_FILE (default docker-compose.prod.yml)
 # Restore:

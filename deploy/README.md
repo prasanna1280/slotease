@@ -28,6 +28,18 @@ Postgres, the API and nginx are reachable only on the internal Docker network.
 
 Recommended plan: **KVM 1** (1 vCPU / 4 GB) is enough to start; **KVM 2** gives headroom for builds.
 
+**Live server at a glance**
+
+| | |
+|---|---|
+| App | `https://slotease.prasanna.digital` |
+| Checkout | `/opt/apps/slotease` (owned by root; `.env` lives here) |
+| Proxy | Shared Traefik (no `USE_CADDY`) |
+| Server clock | UTC (IST = UTC + 5:30) |
+| Cron (root) | `watchdog.sh` every minute, `backup.sh` at 21:00 UTC = 02:30 IST |
+| Backups + logs | `/opt/apps/slotease/backups/` |
+| Update | `cd /opt/apps/slotease && ./deploy/deploy.sh` |
+
 > **Docker runs only on the VPS.** The development machine never runs Docker; develop locally as
 > described in [Local development (no Docker)](#0-local-development-no-docker). CI (GitHub Actions)
 > builds the images to catch Dockerfile errors before you deploy.
@@ -154,9 +166,9 @@ certificate once DNS points at the server and ports 80/443 are open.
 ## 6. Clone and configure
 
 ```bash
-cd ~
-git clone https://github.com/<you>/<repo>.git slotease     # private repo: use a deploy key or a PAT
-cd slotease
+sudo mkdir -p /opt/apps && sudo chown "$USER" /opt/apps
+git clone https://github.com/prasanna1280/slotease.git /opt/apps/slotease   # private repo: use a deploy key or a PAT
+cd /opt/apps/slotease
 
 cp deploy/production.env.example .env      # (cp .env.example .env also works; then edit the CHANGE values)
 nano .env
@@ -215,10 +227,11 @@ Use test-mode keys first, then switch to live keys.
 crontab -e
 ```
 
-Add (daily at 02:30 server time):
+Cron uses the server clock, which is UTC on the VPS. Add (daily at 21:00 UTC = 02:30 IST, outside
+business hours):
 
 ```
-30 2 * * * /home/deploy/slotease/deploy/backup.sh >> /home/deploy/slotease/backups/backup.log 2>&1
+0 21 * * * /opt/apps/slotease/deploy/backup.sh >> /opt/apps/slotease/backups/backup.log 2>&1
 ```
 
 Backups older than 14 days are deleted automatically (`RETENTION_DAYS` to change). Copy them off the server
@@ -231,7 +244,7 @@ healthcheck. `deploy/watchdog.sh` restarts any of `backend`, `frontend`, `redis`
 `unhealthy` (about 90 seconds of failed checks). Add it to the same crontab:
 
 ```
-* * * * * /home/deploy/slotease/deploy/watchdog.sh >> /home/deploy/slotease/backups/watchdog.log 2>&1
+* * * * * /opt/apps/slotease/deploy/watchdog.sh >> /opt/apps/slotease/backups/watchdog.log 2>&1
 ```
 
 `grep restarting backups/watchdog.log` lists every automatic restart. The database is not restarted
@@ -250,7 +263,7 @@ gunzip -c backups/slotease-YYYYmmdd-HHMMSS.sql.gz | \
 ## 10. Updating
 
 ```bash
-cd ~/slotease
+cd /opt/apps/slotease
 ./deploy/deploy.sh
 ```
 

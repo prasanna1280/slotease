@@ -2,7 +2,7 @@
 # SlotEase - restart containers that Docker reports as "unhealthy".
 # `restart: unless-stopped` only covers crashes; a hung process stays up but fails its healthcheck,
 # and plain Docker Compose never restarts it. Run this from cron every minute:
-#   * * * * * /home/deploy/slotease/deploy/watchdog.sh >> /home/deploy/slotease/backups/watchdog.log 2>&1
+#   * * * * * /opt/apps/slotease/deploy/watchdog.sh >> /opt/apps/slotease/backups/watchdog.log 2>&1
 # Env overrides: WATCHDOG_SERVICES (default "backend frontend redis"; db is left out on purpose, a
 #                failing Postgres needs a human), COMPOSE_FILE (default docker-compose.prod.yml)
 set -euo pipefail

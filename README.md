@@ -98,7 +98,7 @@ chmod 600 .env
 # fresh server without a reverse proxy:  USE_CADDY=1 ./deploy/deploy.sh
 ```
 
-Razorpay webhook URL: `https://<DOMAIN>/api/v1/billing/webhook`. Backups: `deploy/backup.sh` (pg_dump, 14-day retention).
+Razorpay webhook URL: `https://<DOMAIN>/api/v1/billing/webhook`. Cron: `deploy/backup.sh` daily (pg_dump, 14-day retention) and `deploy/watchdog.sh` every minute.
 
 ---
 
