@@ -20,6 +20,8 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import URL, Engine, make_url
@@ -101,7 +103,8 @@ def test_migration_creates_schema_and_constraints(pg_engine: Engine) -> None:
     insp = inspect(pg_engine)
     assert set(insp.get_table_names()) >= TABLES
     with pg_engine.connect() as conn:
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0001_initial"
+        head = ScriptDirectory.from_config(Config(str(BACKEND_DIR / "alembic.ini"))).get_current_head()
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == head
         constraint = conn.scalar(
             text("SELECT contype FROM pg_constraint WHERE conname = 'ex_appointments_no_overlap'")
         )
